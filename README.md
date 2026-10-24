@@ -2,8 +2,8 @@
 
 A database project with a web interface for managing a campus canteen: customers, menu, orders, payments, employees and feedback.
 
-**Team:** [Name 1], [Name 2], [Name 3], [Name 4]
-**Course:** [Course name] | **College:** [College name]
+**Team:** Shivangi and Aanya
+**Course:** Database management system (cocsc302)
 
 ## Features
 
