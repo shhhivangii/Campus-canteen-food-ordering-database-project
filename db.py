@@ -1,28 +1,41 @@
-import mysql.connector
+import pyodbc
+
+# ---- CHANGE THIS to the server name you see in SSMS's "Connect" window ----
+SERVER = r"SIMMI\SQLEXPRESS"
+DATABASE = "campus_canteen"
+
+
+def _driver():
+    found = [d for d in pyodbc.drivers() if "SQL Server" in d]
+    if not found:
+        raise RuntimeError("No SQL Server ODBC driver found. Install 'ODBC Driver 18 for SQL Server'.")
+    newest = sorted([d for d in found if d.startswith("ODBC Driver")], reverse=True)
+    return (newest or found)[0]
+
 
 def get_connection():
-    return mysql.connector.connect(
-        host="localhost",
-        user="root",
-        password="YOUR_PASSWORD",
-        database="canteen_db"
-    )
+    conn_str = (f"DRIVER={{{_driver()}}};SERVER={SERVER};DATABASE={DATABASE};"
+                "Trusted_Connection=yes;TrustServerCertificate=yes;")
+    return pyodbc.connect(conn_str)
+
 
 def fetch_all(query, params=None):
-    """Use for SELECT. Returns a list of dicts."""
+    """For SELECT. Returns a list of dictionaries. (%s is converted to ? for SQL Server)"""
     conn = get_connection()
-    cur = conn.cursor(dictionary=True)
-    cur.execute(query, params or ())
-    rows = cur.fetchall()
+    cur = conn.cursor()
+    cur.execute(query.replace("%s", "?"), params or ())
+    cols = [c[0] for c in cur.description]
+    rows = [dict(zip(cols, r)) for r in cur.fetchall()]
     cur.close(); conn.close()
     return rows
 
+
 def execute(query, params=None):
-    """Use for INSERT / UPDATE / DELETE."""
+    """For INSERT / UPDATE / DELETE."""
     conn = get_connection()
     cur = conn.cursor()
-    cur.execute(query, params or ())
+    cur.execute(query.replace("%s", "?"), params or ())
     conn.commit()
-    new_id = cur.lastrowid
+    n = cur.rowcount
     cur.close(); conn.close()
-    return new_id
+    return n

@@ -1,4 +1,4 @@
-"""Reusable CRUD page. Every entity page is built from this one function."""
+"""Reusable CRUD page. Every simple table page is built from this one function."""
 import datetime
 import pandas as pd
 import streamlit as st
@@ -11,17 +11,21 @@ def _widget(f, key, default=None):
         return st.text_input(label, default or "", key=key)
     if t == "number":
         return st.number_input(label, min_value=0.0, value=float(default or 0), key=key)
-    if t == "int":
-        return st.number_input(label, min_value=0, step=1, value=int(default or 0), key=key)
     if t == "date":
         return st.date_input(label, value=default or datetime.date.today(),
                              min_value=datetime.date(1940, 1, 1), key=key)
+    if t == "time":
+        if isinstance(default, datetime.timedelta):      # MySQL TIME comes back as timedelta
+            default = (datetime.datetime.min + default).time()
+        return st.time_input(label, value=default or datetime.time(9, 0), key=key)
+    if t == "bool":
+        return st.checkbox(label, value=bool(default) if default is not None else True, key=key)
     if t == "choice":
         opts = f["options"]
         idx = opts.index(default) if default in opts else 0
         return st.selectbox(label, opts, index=idx, key=key)
     if t == "fk":   # dropdown filled from another table
-        rows = fetch_all(f["sql"])              # needs columns: id, label
+        rows = fetch_all(f["sql"])              # query must return columns: id, label
         ids = [r["id"] for r in rows]
         names = {r["id"]: r["label"] for r in rows}
         if f.get("optional"):
@@ -41,15 +45,16 @@ def crud_page(title, table, pk, fields, view_sql=None):
             vals = {f["name"]: _widget(f, f"{table}_add_{f['name']}") for f in fields}
             ok = st.form_submit_button("Save")
         if ok:
-            first = fields[0]["name"]
-            if first and fields[0]["type"] == "text" and not str(vals[first]).strip():
-                st.error(f"{fields[0]['label']} is required.")
+            empty = [f["label"] for f in fields
+                     if f["type"] == "text" and not f.get("optional") and not str(vals[f["name"]]).strip()]
+            if empty:
+                st.error(f"Required: {', '.join(empty)}")
             else:
                 try:
                     cols = ", ".join(vals)
                     marks = ", ".join(["%s"] * len(vals))
                     execute(f"INSERT INTO {table} ({cols}) VALUES ({marks})", tuple(vals.values()))
-                    st.success("Record added!")
+                    st.success("Record added! Check the View tab.")
                 except Exception as e:
                     st.error(f"Could not save: {e}")
 
@@ -80,7 +85,7 @@ def crud_page(title, table, pk, fields, view_sql=None):
                 try:
                     sets = ", ".join(f"{c}=%s" for c in new)
                     execute(f"UPDATE {table} SET {sets} WHERE {pk}=%s", tuple(new.values()) + (row[pk],))
-                    st.success("Record updated! Open the View tab to see it.")
+                    st.success("Record updated! Check the View tab.")
                 except Exception as e:
                     st.error(f"Could not update: {e}")
 
