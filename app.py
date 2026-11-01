@@ -23,4 +23,7 @@ st.sidebar.caption("Food Ordering & Management System")
 choice = st.sidebar.radio("Navigate", list(PAGES), label_visibility="collapsed")
 
 banner("Campus Canteen", "Order food, manage the menu, and track inventory")
+if "flash" in st.session_state:
+    st.success(st.session_state.pop("flash"))
+
 PAGES[choice]()

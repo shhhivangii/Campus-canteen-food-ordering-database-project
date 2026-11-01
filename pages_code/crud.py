@@ -5,6 +5,12 @@ import streamlit as st
 from db import fetch_all, execute
 
 
+def done(msg):
+    """Remember a success message, then reload the page so every tab shows fresh data."""
+    st.session_state["flash"] = msg
+    st.rerun()
+
+
 def _widget(f, key, default=None):
     t, label = f["type"], f["label"]
     if t == "text":
@@ -41,6 +47,8 @@ def crud_page(title, table, pk, fields, view_sql=None):
 
     # ---------- CREATE ----------
     with t_add:
+        st.subheader("Add a new record")
+        st.caption("Fill in the details below and press Save.")
         with st.form(f"{table}_add"):
             vals = {f["name"]: _widget(f, f"{table}_add_{f['name']}") for f in fields}
             ok = st.form_submit_button("Save")
@@ -54,12 +62,13 @@ def crud_page(title, table, pk, fields, view_sql=None):
                     cols = ", ".join(vals)
                     marks = ", ".join(["%s"] * len(vals))
                     execute(f"INSERT INTO {table} ({cols}) VALUES ({marks})", tuple(vals.values()))
-                    st.success("Record added! Check the View tab.")
+                    done("Record added!")
                 except Exception as e:
                     st.error(f"Could not save: {e}")
 
     # ---------- READ ----------
     with t_view:
+        st.subheader("All records")
         q = st.text_input("🔍 Search", key=f"{table}_search")
         try:
             df = pd.DataFrame(fetch_all(view_sql or f"SELECT * FROM {table}"))
@@ -67,6 +76,7 @@ def crud_page(title, table, pk, fields, view_sql=None):
                 mask = df.astype(str).apply(lambda c: c.str.contains(q, case=False)).any(axis=1)
                 df = df[mask]
             st.dataframe(df, use_container_width=True, hide_index=True)
+            st.caption(f"{len(df)} record(s) found")
         except Exception as e:
             st.error(f"Could not load data: {e}")
 
@@ -75,6 +85,7 @@ def crud_page(title, table, pk, fields, view_sql=None):
 
     # ---------- UPDATE ----------
     with t_upd:
+        st.subheader("Edit an existing record")
         if not rows:
             st.info("Nothing to update yet.")
         else:
@@ -85,12 +96,14 @@ def crud_page(title, table, pk, fields, view_sql=None):
                 try:
                     sets = ", ".join(f"{c}=%s" for c in new)
                     execute(f"UPDATE {table} SET {sets} WHERE {pk}=%s", tuple(new.values()) + (row[pk],))
-                    st.success("Record updated! Check the View tab.")
+                    done("Record updated!")
                 except Exception as e:
                     st.error(f"Could not update: {e}")
 
     # ---------- DELETE ----------
     with t_del:
+        st.subheader("Delete a record")
+        st.caption("This cannot be undone.")
         if not rows:
             st.info("Nothing to delete.")
         else:
@@ -102,6 +115,6 @@ def crud_page(title, table, pk, fields, view_sql=None):
                 else:
                     try:
                         execute(f"DELETE FROM {table} WHERE {pk}=%s", (row[pk],))
-                        st.success("Record deleted.")
+                        done("Record deleted.")
                     except Exception:
                         st.error("Cannot delete: other records depend on this one (foreign key protection).")

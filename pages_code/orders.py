@@ -1,6 +1,7 @@
 import pandas as pd
 import streamlit as st
 from db import fetch_all, execute, get_connection
+from pages_code.crud import done
 
 STATUSES = ["Pending", "Preparing", "Ready", "Completed", "Cancelled"]
 
@@ -37,6 +38,7 @@ def show():
 
     # ---------- CREATE ----------
     with t_new:
+        st.subheader("Create a new order")
         custs = fetch_all("SELECT customer_id, first_name, last_name FROM customer")
         canteens = fetch_all("SELECT canteen_id, canteen_name FROM canteen")
         emps = [None] + fetch_all("SELECT emp_id, emp_name, emp_role FROM employee")
@@ -76,7 +78,7 @@ def show():
                     oid, total = place_order(cust["customer_id"], canteen["canteen_id"],
                                              emp["emp_id"] if emp else None, cart, method, pay_status)
                     st.session_state.cart = []
-                    st.success(f"Order #{oid} placed. Total ₹{total:.2f}")
+                    done(f"Order #{oid} placed. Total ₹{total:.2f}")
                 except Exception as e:
                     st.error(f"Order failed, nothing was saved: {e}")
             if b2.button("Clear cart"):
@@ -87,6 +89,7 @@ def show():
 
     # ---------- READ ----------
     with t_view:
+        st.subheader("All orders")
         rows = fetch_all(
             "SELECT v.order_id, v.customer_name, v.canteen_name, v.order_datetime, v.status, "
             "v.total_amount, p.method, p.pay_status FROM v_order_total v "
@@ -103,6 +106,7 @@ def show():
 
     # ---------- UPDATE ----------
     with t_upd:
+        st.subheader("Change order / payment status")
         if orders:
             o = st.selectbox("Order", orders, format_func=lambda x: f"#{x['order_id']} ({x['status']})", key="uo")
             status = st.selectbox("Order status", STATUSES, index=STATUSES.index(o["status"]), key=f"os_{o['order_id']}")
@@ -111,18 +115,19 @@ def show():
                 try:
                     execute("UPDATE orders SET status=%s WHERE order_id=%s", (status, o["order_id"]))
                     execute("UPDATE payment SET pay_status=%s WHERE order_id=%s", (pay, o["order_id"]))
-                    st.success("Updated! Check View Orders.")
+                    done("Order updated.")
                 except Exception as e:
                     st.error(f"Could not update: {e}")
 
     # ---------- DELETE ----------
     with t_del:
+        st.subheader("Delete an order")
         if orders:
             o = st.selectbox("Order", orders, format_func=lambda x: f"#{x['order_id']} ({x['status']})", key="do")
             sure = st.checkbox("I confirm deleting this order (its items, payment and feedback too)")
             if st.button("Delete order"):
                 if sure:
                     execute("DELETE FROM orders WHERE order_id=%s", (o["order_id"],))
-                    st.success("Order deleted.")
+                    done("Order deleted.")
                 else:
                     st.warning("Tick the confirmation box first.")
