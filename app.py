@@ -15,6 +15,7 @@ PAGES = {
     "🧑‍🍳 Employees": entities.employees,
     "🗂️ Categories": entities.categories,
     "🍔 Menu Items": entities.menu_items,
+    "💰 Canteen Menu & Prices": entities.canteen_menu,
     "⭐ Feedback": feedback.show,
 }
 

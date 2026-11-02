@@ -6,14 +6,16 @@ from db import fetch_all
 def show():
     st.title("📊 Dashboard")
     n_orders = fetch_all("SELECT COUNT(*) AS n FROM orders")[0]["n"]
-    pending = fetch_all("SELECT COUNT(*) AS n FROM orders WHERE status IN ('Pending','Preparing')")[0]["n"]
+    open_orders = fetch_all("SELECT COUNT(*) AS n FROM orders WHERE status IN ('Pending','Preparing','Ready')")[0]["n"]
     revenue = fetch_all("SELECT ISNULL(SUM(amount),0) AS r FROM payment WHERE pay_status='Paid'")[0]["r"]
-    custs = fetch_all("SELECT COUNT(*) AS n FROM customer")[0]["n"]
-    c1, c2, c3, c4 = st.columns(4)
+    refunded = fetch_all("SELECT ISNULL(SUM(refund_amount),0) AS r FROM refund")[0]["r"]
+    custs = fetch_all("SELECT COUNT(*) AS n FROM customer WHERE is_active=1")[0]["n"]
+    c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("Total orders", n_orders)
-    c2.metric("Open orders", pending)
+    c2.metric("Open orders", open_orders)
     c3.metric("Revenue (paid)", f"₹{revenue}")
-    c4.metric("Customers", custs)
+    c4.metric("Refunded", f"₹{refunded}")
+    c5.metric("Active customers", custs)
 
     left, right = st.columns(2)
     with left:
@@ -36,6 +38,13 @@ def show():
     st.dataframe(rt, hide_index=True, use_container_width=True) if not rt.empty else st.info("No feedback yet.")
 
     st.subheader("🕒 Pending payments")
-    pp = pd.DataFrame(fetch_all(
-        "SELECT order_id, amount, method FROM payment WHERE pay_status='Pending'"))
+    pp = pd.DataFrame(fetch_all("SELECT order_id, amount, method FROM payment WHERE pay_status='Pending'"))
     st.dataframe(pp, hide_index=True, use_container_width=True) if not pp.empty else st.success("No pending payments.")
+
+    st.subheader("🛡️ Data-quality check")
+    issues = pd.DataFrame(fetch_all("SELECT issue, ref_id FROM v_integrity_issues"))
+    if issues.empty:
+        st.success("All business rules are satisfied.")
+    else:
+        st.warning("Some records need attention (for example, draft orders with no payment yet):")
+        st.dataframe(issues, hide_index=True, use_container_width=True)

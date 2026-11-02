@@ -1,7 +1,7 @@
 import pandas as pd
 import streamlit as st
 from db import fetch_all, execute
-from pages_code.crud import done
+from pages_code.crud import done, friendly
 
 
 def show():
@@ -11,13 +11,16 @@ def show():
     # ---------- CREATE ----------
     with t_add:
         st.subheader("Rate an item you ordered")
+        st.caption("Feedback is allowed only after the order is Completed.")
         pairs = fetch_all(
             "SELECT oi.order_id, oi.item_id, m.item_name FROM order_item oi "
             "JOIN menu_item m ON m.item_id = oi.item_id "
-            "WHERE NOT EXISTS (SELECT 1 FROM feedback f WHERE f.order_id=oi.order_id AND f.item_id=oi.item_id) "
+            "JOIN orders o ON o.order_id = oi.order_id "
+            "WHERE o.status = 'Completed' AND NOT EXISTS "
+            "(SELECT 1 FROM feedback f WHERE f.order_id=oi.order_id AND f.item_id=oi.item_id) "
             "ORDER BY oi.order_id")
         if not pairs:
-            st.info("Every ordered item already has feedback.")
+            st.info("No completed orders are waiting for feedback.")
         else:
             with st.form("fb_add"):
                 p = st.selectbox("Ordered item", pairs,
@@ -31,7 +34,7 @@ def show():
                             (p["order_id"], p["item_id"], rating, comment or None))
                     done("Feedback saved!")
                 except Exception as e:
-                    st.error(f"Could not save: {e}")
+                    st.error(f"Could not save: {friendly(e)}")
 
     # ---------- READ ----------
     with t_view:
@@ -46,6 +49,10 @@ def show():
         st.subheader("Average rating per dish")
         st.dataframe(pd.DataFrame(fetch_all("SELECT * FROM v_item_rating ORDER BY avg_rating DESC")),
                      use_container_width=True, hide_index=True)
+        st.subheader("Average rating per dish in each canteen")
+        st.dataframe(pd.DataFrame(fetch_all(
+            "SELECT canteen_name, item_name, num_reviews, avg_rating FROM v_canteen_item_rating "
+            "ORDER BY canteen_name, avg_rating DESC")), use_container_width=True, hide_index=True)
 
     rows = fetch_all("SELECT f.order_id, f.item_id, m.item_name, f.rating, f.comment FROM feedback f "
                      "JOIN menu_item m ON m.item_id=f.item_id")
@@ -59,9 +66,12 @@ def show():
             rating = st.slider("New rating", 1, 5, int(r["rating"]), key=f"fb_r_{r['order_id']}_{r['item_id']}")
             comment = st.text_input("New comment", r["comment"] or "", key=f"fb_c_{r['order_id']}_{r['item_id']}")
             if st.button("Update feedback"):
-                execute("UPDATE feedback SET rating=%s, comment=%s WHERE order_id=%s AND item_id=%s",
-                        (rating, comment or None, r["order_id"], r["item_id"]))
-                done("Feedback updated.")
+                try:
+                    execute("UPDATE feedback SET rating=%s, comment=%s WHERE order_id=%s AND item_id=%s",
+                            (rating, comment or None, r["order_id"], r["item_id"]))
+                    done("Feedback updated.")
+                except Exception as e:
+                    st.error(f"Could not update: {friendly(e)}")
         else:
             st.info("No feedback yet.")
 
@@ -73,7 +83,12 @@ def show():
             sure = st.checkbox("I confirm I want to delete this feedback")
             if st.button("Delete feedback"):
                 if sure:
-                    execute("DELETE FROM feedback WHERE order_id=%s AND item_id=%s", (r["order_id"], r["item_id"]))
-                    done("Feedback deleted.")
+                    try:
+                        execute("DELETE FROM feedback WHERE order_id=%s AND item_id=%s", (r["order_id"], r["item_id"]))
+                        done("Feedback deleted.")
+                    except Exception as e:
+                        st.error(f"Cannot delete: {friendly(e)}")
                 else:
                     st.warning("Tick the confirmation box first.")
+        else:
+            st.info("No feedback to delete.")
